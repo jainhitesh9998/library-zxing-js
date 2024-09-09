@@ -66,26 +66,39 @@
             videoContainer.style.display = 'block';
             exitButton.style.display = 'block';
 
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                video.srcObject = stream;
-                video.play();
+            codeReader = new ZXing.BrowserQRCodeReader();
 
-                codeReader = new ZXing.BrowserQRCodeReader();
-                codeReader.decodeFromVideoElement(video, (result, err) => {
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: 'environment'
+                    }
+                };
+
+                codeReader.decodeFromConstraints(constraints, video, (result, err) => {
                     if (result) {
+                        console.log('QR Code detected:', result.text);
                         alert(`QR Code detected: ${result.text}`);
                         stopScanner();
                     }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error('Decoding error:', err);
+                    }
+                }).then(() => {
+                    console.log('Decoding started');
+                }).catch((err) => {
+                    console.error('Error in decoding:', err);
                 });
 
                 // Set timeout
                 setTimeout(() => {
                     if (videoContainer.style.display !== 'none') {
-                        alert('No QR code detected within 5 seconds.');
+                        console.log('No QR code detected within 10 seconds.');
+                        alert('No QR code detected within 10 seconds.');
                         stopScanner();
                     }
-                }, 5000);
+                }, 10000);
+
             } catch (error) {
                 console.error('Error accessing the camera:', error);
                 alert('Unable to access the camera. Please make sure you have given permission.');
@@ -98,9 +111,6 @@
                 codeReader.reset();
                 videoContainer.style.display = 'none';
                 exitButton.style.display = 'none';
-                if (video.srcObject) {
-                    video.srcObject.getTracks().forEach(track => track.stop());
-                }
             }
         }
     </script>
