@@ -1,121 +1,207 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="author" content="ZXing for JS">
-
-  <title>ZXing TypeScript | Decoding from camera stream</title>
-
-  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
-    href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
-  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
-    href="https://unpkg.com/normalize.css@8.0.0/normalize.css">
-  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
-    href="https://unpkg.com/milligram@1.3.0/dist/milligram.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner with Resolution Toggle</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        #video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-color: #000;
+            overflow: hidden;
+        }
+        #qr-video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+        }
+        #exit-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            font-size: 24px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: none;
+        }
+        #scan-button {
+            font-size: 18px;
+            padding: 10px 20px;
+            margin: 10px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin: 10px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .toggle-label {
+            font-size: 18px;
+            vertical-align: super;
+        }
+    </style>
 </head>
-
 <body>
+    <button id="scan-button">Scan QR Code</button>
+    <label class="switch">
+        <input type="checkbox" id="resolution-toggle">
+        <span class="slider"></span>
+    </label>
+    <span class="toggle-label">High Resolution</span>
+    <div id="video-container">
+        <video id="qr-video" playsinline></video>
+    </div>
+    <button id="exit-button">X</button>
 
-  <main class="wrapper" style="padding-top:2em">
+    <script>
+        const scanButton = document.getElementById('scan-button');
+        const videoContainer = document.getElementById('video-container');
+        const video = document.getElementById('qr-video');
+        const exitButton = document.getElementById('exit-button');
+        const resolutionToggle = document.getElementById('resolution-toggle');
 
-    <section class="container" id="demo-content">
-      <h1 class="title">Scan 1D/2D Code from Video Camera</h1>
+        let codeReader;
 
-      <p>
-        <a class="button-small button-outline" href="../../index.html">HOME 🏡</a>
-      </p>
+        scanButton.addEventListener('click', startScanner);
+        exitButton.addEventListener('click', stopScanner);
 
-      <p>This example shows how to scan any supported 1D/2D code with ZXing javascript library from the device video
-        camera. If more
-        than one video input devices are available (for example front and back camera) the example shows how to read
-        them and use a select to change the input device.</p>
-
-      <div>
-        <a class="button" id="startButton">Start</a>
-        <a class="button" id="resetButton">Reset</a>
-      </div>
-
-      <div>
-        <video id="video" width="300" height="200" style="border: 1px solid gray"></video>
-      </div>
-
-      <div id="sourceSelectPanel" style="display:none">
-        <label for="sourceSelect">Change video source:</label>
-        <select id="sourceSelect" style="max-width:400px">
-        </select>
-      </div>
-
-      <label>Result:</label>
-      <pre><code id="result"></code></pre>
-
-      <p>See the <a href="https://github.com/zxing-js/library/tree/master/docs/examples/multi-camera/">source code</a>
-        for this example.</p>
-    </section>
-
-    <footer class="footer">
-      <section class="container">
-        <p>ZXing TypeScript Demo. Licensed under the <a target="_blank"
-            href="https://github.com/zxing-js/library#license" title="MIT">MIT</a>.</p>
-      </section>
-    </footer>
-
-  </main>
-
-  <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
-  <script type="text/javascript">
-    window.addEventListener('load', function () {
-      let selectedDeviceId;
-      const codeReader = new ZXing.BrowserMultiFormatReader()
-      console.log('ZXing code reader initialized')
-      codeReader.listVideoInputDevices()
-        .then((videoInputDevices) => {
-          const sourceSelect = document.getElementById('sourceSelect')
-          selectedDeviceId = videoInputDevices[0].deviceId
-          if (videoInputDevices.length >= 1) {
-            videoInputDevices.forEach((element) => {
-              const sourceOption = document.createElement('option')
-              sourceOption.text = element.label
-              sourceOption.value = element.deviceId
-              sourceSelect.appendChild(sourceOption)
-            })
-
-            sourceSelect.onchange = () => {
-              selectedDeviceId = sourceSelect.value;
+        function getDefaultConstraints() {
+            return {
+                video: {
+                    facingMode: 'environment'
+                }
             };
+        }
 
-            const sourceSelectPanel = document.getElementById('sourceSelectPanel')
-            sourceSelectPanel.style.display = 'block'
-          }
+        function getHighestResolutionConstraints() {
+            return {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 3840 },
+                    height: { ideal: 2160 }
+                }
+            };
+        }
 
-          document.getElementById('startButton').addEventListener('click', () => {
-            codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-              if (result) {
-                console.log(result)
-                document.getElementById('result').textContent = result.text
-              }
-              if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.error(err)
-                document.getElementById('result').textContent = err
-              }
-            })
-            console.log(`Started continous decode from camera with id ${selectedDeviceId}`)
-          })
+        function adjustVideoSize() {
+            const videoRatio = video.videoWidth / video.videoHeight;
+            const containerRatio = videoContainer.clientWidth / videoContainer.clientHeight;
 
-          document.getElementById('resetButton').addEventListener('click', () => {
-            codeReader.reset()
-            document.getElementById('result').textContent = '';
-            console.log('Reset.')
-          })
+            if (videoRatio > containerRatio) {
+                video.style.width = 'auto';
+                video.style.height = '100%';
+            } else {
+                video.style.width = '100%';
+                video.style.height = 'auto';
+            }
+        }
 
-        })
-        .catch((err) => {
-          console.error(err)
-        })
-    })
-  </script>
+        async function startScanner() {
+            videoContainer.style.display = 'block';
+            exitButton.style.display = 'block';
 
+            codeReader = new ZXing.BrowserQRCodeReader();
+
+            try {
+                const constraints = resolutionToggle.checked ? 
+                    await getHighestResolutionConstraints() : 
+                    getDefaultConstraints();
+
+                codeReader.decodeFromConstraints(constraints, video, (result, err) => {
+                    if (result) {
+                        console.log('QR Code detected:', result.text);
+                        alert(`QR Code detected: ${result.text}`);
+                        stopScanner();
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error('Decoding error:', err);
+                    }
+                }).then(() => {
+                    console.log('Decoding started');
+                    video.addEventListener('loadedmetadata', adjustVideoSize);
+                    window.addEventListener('resize', adjustVideoSize);
+                }).catch((err) => {
+                    console.error('Error in decoding:', err);
+                });
+
+                setTimeout(() => {
+                    if (videoContainer.style.display !== 'none') {
+                        console.log('No QR code detected within 15 seconds.');
+                        alert('No QR code detected within 15 seconds.');
+                        stopScanner();
+                    }
+                }, 15000);
+
+            } catch (error) {
+                console.error('Error accessing the camera:', error);
+                alert('Unable to access the camera. Please make sure you have given permission.');
+                stopScanner();
+            }
+        }
+
+        function stopScanner() {
+            if (codeReader) {
+                codeReader.reset();
+                videoContainer.style.display = 'none';
+                exitButton.style.display = 'none';
+                video.removeEventListener('loadedmetadata', adjustVideoSize);
+                window.removeEventListener('resize', adjustVideoSize);
+            }
+        }
+    </script>
 </body>
-
 </html>
